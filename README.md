@@ -1,4 +1,6 @@
 # FPGA_Pacman(ECE 385 Final Project)
+## Overview
+This is a Pacman gam running on the FPGA.
 ## Running Instruction
 1. Compile the project in Quartus
 2. Generate BSP, Build, and Run Config in Eclipse
