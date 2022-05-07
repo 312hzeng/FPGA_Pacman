@@ -1,0 +1,17 @@
+module wall (input drawX, draw Y,
+                          output isWall);
+    assign index = (drawY * 80 + drawX);
+    assign k = 2’d0;
+//    if(index >= 89 && index <=150 || index >= 2089 && index <= 2150)
+//    begin
+//        isWall = true;
+//    end
+
+    if(index > 335 && index < 345)
+        isWall = true;
+    if(index > 360 && index < 365)
+        isWall = true;
+    if(index >372 && index < 379)
+        isWall = true;
+
+endmodule

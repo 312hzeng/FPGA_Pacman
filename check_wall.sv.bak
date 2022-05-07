@@ -1,0 +1,30 @@
+module check_wall(input [9:0] DrawX,
+						input [9:0] DrawY,
+						input [9:0] PacmanX, PacmanY, PacmanS
+						output logic isWall, UpWall, DownWall, LeftWall, RightWall
+						); 
+	 
+	 
+	 
+	 wall wall(.DrawX(DrawX),
+				  .DrawY(DrawY),
+				  .isWall(isWall)
+	 );
+	 
+	 wall UPWALL(.DrawX(PacmanX),
+				    .DrawY(PacmanY - PacmanS),
+				    .isWall(UpWall)
+	 );
+	 wall DOWNWALL(.DrawX(PacmanX),
+				  .DrawY(PacmanY + PacmanS),
+				  .isWall(DownWall)
+	 );
+	 wall LEFTWALL(.DrawX(PacmanX - PacmanS),
+				      .DrawY(PacmanY),
+				      .isWall(LeftWall)
+	 );
+	 wall RIGHTWALL(.DrawX(PacmanX + PacmanS),
+				       .DrawY(PacmanY),
+				       .isWall(RightWall)
+	 );
+	 

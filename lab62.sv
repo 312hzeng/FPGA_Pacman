@@ -1,0 +1,320 @@
+module lab62 (
+
+      ///////// Clocks /////////
+      input     MAX10_CLK1_50, 
+
+      ///////// KEY /////////
+      input    [ 1: 0]   KEY,
+
+      ///////// SW /////////
+      input    [ 9: 0]   SW,
+
+      ///////// LEDR /////////
+      output   [ 9: 0]   LEDR,
+
+      ///////// HEX /////////
+      output   [ 7: 0]   HEX0,
+      output   [ 7: 0]   HEX1,
+      output   [ 7: 0]   HEX2,
+      output   [ 7: 0]   HEX3,
+      output   [ 7: 0]   HEX4,
+      output   [ 7: 0]   HEX5,
+
+      ///////// SDRAM /////////
+      output             DRAM_CLK,
+      output             DRAM_CKE,
+      output   [12: 0]   DRAM_ADDR,
+      output   [ 1: 0]   DRAM_BA,
+      inout    [15: 0]   DRAM_DQ,
+      output             DRAM_LDQM,
+      output             DRAM_UDQM,
+      output             DRAM_CS_N,
+      output             DRAM_WE_N,
+      output             DRAM_CAS_N,
+      output             DRAM_RAS_N,
+
+      ///////// VGA /////////
+      output             VGA_HS,
+      output             VGA_VS,
+      output   [ 3: 0]   VGA_R,
+      output   [ 3: 0]   VGA_G,
+      output   [ 3: 0]   VGA_B,
+
+
+      ///////// ARDUINO /////////
+      inout    [15: 0]   ARDUINO_IO,
+      inout              ARDUINO_RESET_N 
+
+);
+
+
+
+
+
+
+//=======================================================
+//  REG/WIRE declarations
+//=======================================================
+	logic SPI0_CS_N, SPI0_SCLK, SPI0_MISO, SPI0_MOSI, USB_GPX, USB_IRQ, USB_RST;
+	logic [3:0] hex_num_4, hex_num_3, hex_num_1, hex_num_0; //4 bit input hex digits
+	logic [1:0] signs;
+	logic [1:0] hundreds;
+	//logic [9:0] drawxsig, drawysig, ballxsig, ballysig, ballsizesig;
+	
+	
+//=======================================================
+//  Structural coding
+//=======================================================
+	assign ARDUINO_IO[10] = SPI0_CS_N;
+	assign ARDUINO_IO[13] = SPI0_SCLK;
+	assign ARDUINO_IO[11] = SPI0_MOSI;
+	assign ARDUINO_IO[12] = 1'bZ;
+	assign SPI0_MISO = ARDUINO_IO[12];
+	
+	assign ARDUINO_IO[9] = 1'bZ; 
+	assign USB_IRQ = ARDUINO_IO[9];
+		
+	//Assignments specific to Circuits At Home UHS_20
+	assign ARDUINO_RESET_N = USB_RST;
+	assign ARDUINO_IO[7] = USB_RST;//USB reset 
+	assign ARDUINO_IO[8] = 1'bZ; //this is GPX (set to input)
+	assign USB_GPX = 1'b0;//GPX is not needed for standard USB host - set to 0 to prevent interrupt
+	
+	//Assign uSD CS to '1' to prevent uSD card from interfering with USB Host (if uSD card is plugged in)
+	assign ARDUINO_IO[6] = 1'b1;
+	
+	//HEX drivers to convert numbers to HEX output
+	HexDriver hex_driver4 (hex_num_4, HEX4[6:0]);
+	assign HEX4[7] = 1'b1;
+	
+	HexDriver hex_driver3 (hex_num_3, HEX3[6:0]);
+	assign HEX3[7] = 1'b1;
+	
+	HexDriver hex_driver1 (hex_num_1, HEX1[6:0]);
+	assign HEX1[7] = 1'b1;
+	
+	HexDriver hex_driver0 (hex_num_0, HEX0[6:0]);
+	assign HEX0[7] = 1'b1;
+	
+	//fill in the hundreds digit as well as the negative sign
+	assign HEX5 = {1'b1, ~signs[1], 3'b111, ~hundreds[1], ~hundreds[1], 1'b1};
+	assign HEX2 = {1'b1, ~signs[0], 3'b111, ~hundreds[0], ~hundreds[0], 1'b1};
+	
+	//variable declarations
+	logic Reset_h, vssig, blank, sync, VGA_Clk, Execute;
+   logic [9:0] drawxsig, drawysig; 
+	logic [9:0] pacmanxsig, pacmanysig, pacmansizesig;
+	logic [9:0] ghost1xsig, ghost1ysig, ghost1sizesig;
+	logic [9:0] ghost2xsig, ghost2ysig, ghost2sizesig;
+
+	logic PUpWall, PDownWall, PLeftWall, PRightWall;
+	logic G1UpWall, G1DownWall, G1LeftWall, G1RightWall;
+	logic G2UpWall, G2DownWall, G2LeftWall, G2RightWall;
+
+	
+	logic [7:0] Red, Blue, Green;
+	logic [7:0] keycode;
+	logic isWall, isFood;
+
+	logic finish, replay, restart, fail, fail_finish, isIntro;
+	logic [1:0] LC, pac_move, intro;
+	//Assign one button to reset
+	assign {Reset_h}=~ (KEY[0]);
+	assign {Execute}=~ (KEY[1]);
+
+
+	//Our A/D converter is only 12 bit
+	assign VGA_R = Red[7:4];
+	assign VGA_B = Blue[7:4];
+	assign VGA_G = Green[7:4];
+	
+	
+	lab62_soc u0 (
+		.clk_clk                           (MAX10_CLK1_50),  //clk.clk
+		.reset_reset_n                     (1'b1),           //reset.reset_n
+		.altpll_0_locked_conduit_export    (),               //altpll_0_locked_conduit.export
+		.altpll_0_phasedone_conduit_export (),               //altpll_0_phasedone_conduit.export
+		.altpll_0_areset_conduit_export    (),               //altpll_0_areset_conduit.export
+		.key_external_connection_export    (KEY),            //key_external_connection.export
+
+		//SDRAM
+		.sdram_clk_clk(DRAM_CLK),                            //clk_sdram.clk
+		.sdram_wire_addr(DRAM_ADDR),                         //sdram_wire.addr
+		.sdram_wire_ba(DRAM_BA),                             //.ba
+		.sdram_wire_cas_n(DRAM_CAS_N),                       //.cas_n
+		.sdram_wire_cke(DRAM_CKE),                           //.cke
+		.sdram_wire_cs_n(DRAM_CS_N),                         //.cs_n
+		.sdram_wire_dq(DRAM_DQ),                             //.dq
+		.sdram_wire_dqm({DRAM_UDQM,DRAM_LDQM}),              //.dqm
+		.sdram_wire_ras_n(DRAM_RAS_N),                       //.ras_n
+		.sdram_wire_we_n(DRAM_WE_N),                         //.we_n
+
+		//USB SPI	
+		.spi0_SS_n(SPI0_CS_N),
+		.spi0_MOSI(SPI0_MOSI),
+		.spi0_MISO(SPI0_MISO),
+		.spi0_SCLK(SPI0_SCLK),
+		
+		//USB GPIO
+		.usb_rst_export(USB_RST),
+		.usb_irq_export(USB_IRQ),
+		.usb_gpx_export(USB_GPX),
+		
+		//LEDs and HEX
+		.hex_digits_export({hex_num_4, hex_num_3, hex_num_1, hex_num_0}),
+		.leds_export({hundreds, signs, LEDR}),
+		.keycode_export(keycode)
+		
+	 );
+	 
+	 
+	
+	 //hs
+	 //pixel clk used for what
+	 vga_controller VGA_Controller(.Clk(MAX10_CLK1_50),       
+                                  .Reset(Reset_h),     
+                                  .hs(VGA_HS),        // Horizontal sync pulse.  Active low
+								          .vs(VGA_VS),        // Vertical sync pulse.  Active low
+											 .pixel_clk(VGA_Clk), // 25 MHz pixel clock output
+											 .blank(blank),     // Blanking interval indicator.  Active low.
+										    .sync(sync),      // Composite Sync signal.  Active low.  We don't use it in this lab,
+												             //   but the video DAC on the DE2 board requires an input for it.
+								          .DrawX(drawxsig),     // horizontal coordinate
+								          .DrawY(drawysig));
+
+								  
+	 control (.Clk(VGA_VS), 
+				 .Reset(Reset_h),
+				 .Execute(Execute),
+				 .finish(finish || fail_finish),
+				 .fail(fail),
+             .replay(replay), 
+				 .restart(restart),
+				 .isIntro(isIntro) );
+
+	 check_wall Wall(.DrawX(drawxsig),
+						  .DrawY(drawysig),
+						  .ObjectX(0),
+						  .ObjectY(0),
+						  .ObjectS(0),
+						  .isWall(isWall),
+						  .UpWall(0),
+						  .DownWall(0),
+						  .LeftWall(0),
+						  .RightWall(0));
+						  
+	 
+	 check_wall ghost1Wall(.DrawX(drawxsig),
+								  .DrawY(drawysig),
+								  .ObjectX(ghost1xsig),
+								  .ObjectY(ghost1ysig),
+								  .ObjectS(ghost1sizesig),
+								  .isWall(0),
+								  .UpWall(G1UpWall),
+								  .DownWall(G1DownWall),
+								  .LeftWall(G1LeftWall),
+								  .RightWall(G1RightWall));
+								  
+	 check_wall ghost2Wall(.DrawX(drawxsig),
+								  .DrawY(drawysig),
+								  .ObjectX(ghost2xsig),
+								  .ObjectY(ghost2ysig),
+								  .ObjectS(ghost2sizesig),
+								  .isWall(0),
+								  .UpWall(G2UpWall),
+								  .DownWall(G2DownWall),
+								  .LeftWall(G2LeftWall),
+								  .RightWall(G2RightWall));
+								  
+	check_wall pacmanWall(.DrawX(drawxsig),
+								  .DrawY(drawysig),
+								  .ObjectX(pacmanxsig),
+								  .ObjectY(pacmanysig),
+								  .ObjectS(pacmansizesig),
+								  .isWall(0),
+								  .UpWall(PUpWall),
+								  .DownWall(PDownWall),
+								  .LeftWall(PLeftWall),
+								  .RightWall(PRightWall));
+	 intro introscreen(.DrawX(drawxsig),
+					 .DrawY(drawysig),
+					 .intro(intro)
+	 );
+	 pacman pacman(.Reset(Reset_h || restart || replay), 
+						.frame_clk(VGA_VS),
+					   .UpWall(PUpWall), 
+						.DownWall(PDownWall),
+						.LeftWall(PLeftWall),
+						.RightWall(PRightWall),
+					   .keycode(keycode),
+                  .PacmanX(pacmanxsig), 
+						.PacmanY(pacmanysig),
+						.PacmanS(pacmansizesig));
+						
+						
+	 ghost1 ghost1(.Reset(Reset_h || restart || replay), 
+						.frame_clk(VGA_VS),
+					   .UpWall(G1UpWall), 
+						.DownWall(G1DownWall),
+						.LeftWall(G1LeftWall),
+						.RightWall(G1RightWall),
+                  .GhostX(ghost1xsig), 
+						.GhostY(ghost1ysig),
+						.GhostS(ghost1sizesig));
+						
+											
+	 ghost2 ghost2(.Reset(Reset_h || restart || replay), 
+						.frame_clk(VGA_VS),
+					   .UpWall(G2UpWall), 
+						.DownWall(G2DownWall),
+						.LeftWall(G2LeftWall),
+						.RightWall(G2RightWall),
+                  .GhostX(ghost2xsig), 
+						.GhostY(ghost2ysig),
+						.GhostS(ghost2sizesig));
+	 
+	 food food(.Reset(Reset_h || restart),
+				  .clock(VGA_VS),
+				  .DrawX(drawxsig),
+				  .DrawY(drawysig),
+				  .PacmanX(pacmanxsig),
+				  .PacmanY(pacmanysig), 
+				  .isFood(isFood),
+				  .finish(finish));
+				  
+	 lifecounter lifecounter(.clock(VGA_VS), 
+	                         .Reset(Reset_h || restart), 
+									 .fail(fail),
+						          .LC(LC));
+	 pacman_updown_counter(.clock(VGA_VS), 
+	                       .Reset(Reset_h || restart || replay), 
+								  .out(pac_move));
+						
+	 color_mapper Color_Mapper(.PacmanX(pacmanxsig), 
+	                           .PacmanY(pacmanysig), 
+										.Ghost1X(ghost1xsig),
+										.Ghost1Y(ghost1ysig),
+										.Ghost1_Size(ghost1sizesig),
+										.Ghost2X(ghost2xsig),
+										.Ghost2Y(ghost2ysig),
+										.Ghost2_Size(ghost2sizesig),
+					               .DrawX(drawxsig), 
+					               .DrawY(drawysig), 
+										.Pacman_Size(pacmansizesig),
+										.isWall(isWall),
+										.isFood(isFood),
+										.intro(intro),
+										.isIntro(isIntro),
+										.pac_move(pac_move),
+										.LC(LC),
+										.fail(fail),
+										.fail_finish(fail_finish),
+                              .Red(Red), 
+					               .Green(Green), 
+					               .Blue(Blue), 
+										.blank(blank));
+
+	
+	 
+
+endmodule

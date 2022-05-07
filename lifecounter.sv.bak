@@ -1,0 +1,11 @@
+module lifecounter(input clock, Reset, fail,
+						 output logic LC);
+				
+	logic [1:0]
+	always_ff @ (posedge clock)
+	begin
+		if(Reset)
+		
+	end
+						 
+endmodule
